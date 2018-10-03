@@ -1,6 +1,9 @@
-# This script trains the BiLSTM-CRF architecture for part-of-speech tagging using
-# the universal dependency dataset (http://universaldependencies.org/).
-# The code use the embeddings by Komninos et al. (https://www.cs.york.ac.uk/nlp/extvec/)
+# This file contain an example how to perform multi-task learning on different levels.
+# In the datasets variable, we specify two datasets: POS-tagging (unidep_pos) and conll2000_chunking.
+# We pass a special parameter to the network (customClassifier), that allows that task are supervised at different levels.
+# For the POS task, we use one shared LSTM layer followed by a softmax classifier. However, the chunking
+# task uses the shared LSTM layer, then a task specific LSTM layer with 50 recurrent units, and then a CRF classifier.
+
 from __future__ import print_function
 import os
 import logging
@@ -8,7 +11,7 @@ import sys
 from neuralnets.BiLSTM import BiLSTM
 from util.preprocessing import perpareDataset, loadDatasetPickle
 
-
+from keras import backend as K
 
 # :: Change into the working dir of the script ::
 abspath = os.path.abspath(__file__)
@@ -33,16 +36,19 @@ logger.addHandler(ch)
 #
 ######################################################
 datasets = {
-    'unidep_pos':                            #Name of the dataset
-        {'columns': {1:'tokens', 3:'POS'},   #CoNLL format for the input data. Column 1 contains tokens, column 3 contains POS information
-         'label': 'POS',                     #Which column we like to predict
-         'evaluate': True,                   #Should we evaluate on this task? Set true always for single task setups
-         'commentSymbol': None}              #Lines in the input data starting with this string will be skipped. Can be used to skip comments
+    'unidep_pos':
+        {'columns': {1:'tokens', 3:'POS'},
+         'label': 'POS',
+         'evaluate': True,
+         'commentSymbol': None},
+    'conll2000_chunking':
+        {'columns': {0:'tokens', 2:'chunk_BIO'},
+         'label': 'chunk_BIO',
+         'evaluate': True,
+         'commentSymbol': None},
 }
 
-
-# :: Path on your computer to the word embeddings. Embeddings by Komninos et al. will be downloaded automatically ::
-embeddingsPath = 'komninos_english_embeddings.gz'
+embeddingsPath = 'komninos_english_embeddings.gz' #Word embeddings by Levy et al: https://levyomer.wordpress.com/2014/04/25/dependency-based-word-embeddings/
 
 # :: Prepares the dataset to be used with the LSTM-network. Creates and stores cPickle files in the pkl/ folder ::
 pickleFile = perpareDataset(embeddingsPath, datasets)
@@ -59,13 +65,14 @@ pickleFile = perpareDataset(embeddingsPath, datasets)
 embeddings, mappings, data = loadDatasetPickle(pickleFile)
 
 # Some network hyperparameters
-params = {'classifier': ['CRF'], 'LSTM-Size': [100], 'dropout': (0.25, 0.25)}
+params = {'classifier': ['CRF'], 'LSTM-Size': [100], 'dropout': (0.25, 0.25),
+          'customClassifier': {'unidep_pos': ['Softmax'], 'conll2000_chunking': [('LSTM', 50), 'CRF']}}
+
 
 model = BiLSTM(params)
 model.setMappings(mappings, embeddings)
 model.setDataset(datasets, data)
-model.storeResults('results/unidep_pos_results.csv') #Path to store performance scores for dev / test
-model.modelSavePath = "models/[ModelName]_[DevScore]_[TestScore]_[Epoch].h5" #Path to store models
+model.modelSavePath = "models/[ModelName]_[DevScore]_[TestScore]_[Epoch].h5"
 model.fit(epochs=25)
 
 

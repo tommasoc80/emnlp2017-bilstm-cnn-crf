@@ -1,6 +1,6 @@
-# This script trains the BiLSTM-CRF architecture for part-of-speech tagging using
-# the universal dependency dataset (http://universaldependencies.org/).
-# The code use the embeddings by Komninos et al. (https://www.cs.york.ac.uk/nlp/extvec/)
+# This script trains the BiLSTM-CRF architecture for part-of-speech tagging
+# and stores it to disk. Then, it loads the model to continue the training.
+# For more details, see docs/Save_Load_Models.md
 from __future__ import print_function
 import os
 import logging
@@ -61,12 +61,19 @@ embeddings, mappings, data = loadDatasetPickle(pickleFile)
 # Some network hyperparameters
 params = {'classifier': ['CRF'], 'LSTM-Size': [100], 'dropout': (0.25, 0.25)}
 
+print("Train the model with 1 Epoch and store to disk")
 model = BiLSTM(params)
 model.setMappings(mappings, embeddings)
 model.setDataset(datasets, data)
-model.storeResults('results/unidep_pos_results.csv') #Path to store performance scores for dev / test
-model.modelSavePath = "models/[ModelName]_[DevScore]_[TestScore]_[Epoch].h5" #Path to store models
-model.fit(epochs=25)
+model.modelSavePath = "models/my_model_[Epoch].h5"
+model.fit(epochs=1)
 
+print("\n\n\n\n------------------------")
+print("Load the model and continue training")
+newModel = BiLSTM.loadModel('models/my_model_1.h5')
+newModel.setDataset(datasets, data)
+newModel.modelSavePath = "models/my_reloaded_model_[Epoch].h5"
+newModel.fit(epochs=1)
 
+print("retrained model store at "+newModel.modelSavePath)
 
